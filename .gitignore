@@ -1,0 +1,99 @@
+# =========================
+# macOS
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =========================
+# Unity generated folders
+# =========================
+[Ll]ibrary/
+[Tt]emp/
+[Tt]mp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# =========================
+# Unity generated files
+# =========================
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+sysinfo.txt
+
+# =========================
+# Unity Addressables / Cache
+# =========================
+Assets/AddressableAssetsData/*/*.bin*
+Assets/AddressableAssetsData/OSX
+Assets/AddressableAssetsData/Windows
+Assets/AddressableAssetsData/Linux
+
+# =========================
+# Visual Studio / Rider / VS Code
+# =========================
+.vs/
+.idea/
+.fleet/
+.vscode/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.DotSettings.user
+
+# =========================
+# Gradle / Android build
+# =========================
+.gradle/
+build/
+*.apk
+*.aab
+
+# =========================
+# Xcode / iOS build
+# =========================
+*.xcworkspace
+xcuserdata/
+DerivedData/
+*.ipa
+
+# =========================
+# Crash / log / debug
+# =========================
+*.log
+*.stackdump
+
+# =========================
+# SVN / local temp
+# =========================
+.svn/
+*.orig
+*.rej
+
+# =========================
+# Git local
+# 注意：.git/ 通常不需要写进 .gitignore，但保留可避免 Unity/SVN 场景误提交
+# =========================
+.git/
