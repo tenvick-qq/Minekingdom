@@ -6701,6 +6701,229 @@
 
   addLog('v0.10.29：鼠标点击/抬起会强制取消地图拖动，人物攻击后不再拖着地图走。','good');
 
+  // ===== v0.10.30：全 UI 缩放 + 敌对阵营强化 =====
+  const PATCH_V1030 = 'v0.10.30-ui-scale-hostile-growth';
+  const HOSTILE_FACTIONS_V1030 = ['raider','zombie','shadow'];
+  const HOSTILE_BUILDINGS_V1030 = new Set(['raiderCamp','raiderTower','zombieNest','zombieHouse','shadowRift','shadowTotem']);
+
+  const uiScaleStyleV1030 = document.createElement('style');
+  uiScaleStyleV1030.textContent = `
+    #uiScaleRange{width:calc(170px * var(--ui-scale))!important}
+    .panel:not(.panel-minimized){resize:both;overflow:auto;max-width:96vw;max-height:92vh}
+    .panel .content{min-width:0}
+    .menu-inner{gap:calc(18px * var(--ui-scale));width:min(92vw,calc(760px * var(--ui-scale)));padding:calc(28px * var(--ui-scale)) calc(20px * var(--ui-scale))}
+    .menu-logo{width:min(76vw,calc(620px * var(--ui-scale)))}
+    .menu-sub{font-size:calc(16px * var(--ui-scale))}
+    .menu-version{font-size:calc(14px * var(--ui-scale));left:calc(6px * var(--ui-scale));bottom:calc(5px * var(--ui-scale))}
+    .menu-btn{min-width:calc(220px * var(--ui-scale));padding:calc(14px * var(--ui-scale)) calc(26px * var(--ui-scale));font-size:calc(18px * var(--ui-scale))}
+    .menu-card{width:min(90vw,calc(560px * var(--ui-scale)));border-width:calc(4px * var(--ui-scale));outline-width:calc(4px * var(--ui-scale));padding:calc(18px * var(--ui-scale)) calc(18px * var(--ui-scale)) calc(16px * var(--ui-scale))}
+    .menu-card-title{font-size:calc(24px * var(--ui-scale));margin-bottom:calc(14px * var(--ui-scale))}
+    .save-list{gap:calc(10px * var(--ui-scale));min-height:calc(132px * var(--ui-scale));max-height:min(58vh,calc(320px * var(--ui-scale)));padding-right:calc(6px * var(--ui-scale));margin-bottom:calc(14px * var(--ui-scale))}
+    .save-slot{border-width:calc(2px * var(--ui-scale));outline-width:calc(2px * var(--ui-scale));padding:calc(12px * var(--ui-scale))}
+    .save-slot-title{font-size:calc(16px * var(--ui-scale));margin-bottom:calc(4px * var(--ui-scale))}
+    .save-slot-meta,.save-slot-delete{font-size:calc(12px * var(--ui-scale))}
+    .save-slot-delete{margin-top:calc(8px * var(--ui-scale));padding:calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale))}
+    .menu-actions,.menu-actions .row{gap:calc(10px * var(--ui-scale))}
+    .title-logo-wrap{min-height:calc(240px * var(--ui-scale));padding:calc(18px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(8px * var(--ui-scale))}
+    .title-logo-text{font-size:calc(72px * var(--ui-scale))}
+    .mode-menu-card{width:min(92vw,calc(560px * var(--ui-scale)));border-width:calc(3px * var(--ui-scale));border-radius:calc(14px * var(--ui-scale));padding:calc(18px * var(--ui-scale))}
+    .mode-menu-title{font-size:calc(28px * var(--ui-scale));margin-bottom:calc(14px * var(--ui-scale))}
+    .mode-choice-grid{gap:calc(12px * var(--ui-scale))}
+    .mode-choice{padding:calc(16px * var(--ui-scale));border-radius:calc(12px * var(--ui-scale));border-width:calc(2px * var(--ui-scale))}
+    .mode-choice h3{font-size:calc(22px * var(--ui-scale));margin-bottom:calc(8px * var(--ui-scale))}
+    .mode-choice p{font-size:calc(14px * var(--ui-scale))}
+    .mode-menu-actions{margin-top:calc(14px * var(--ui-scale))}
+    #xpWrap{bottom:calc(96px * var(--ui-scale))!important;gap:calc(4px * var(--ui-scale))!important}
+    #xpLabel{font-size:calc(26px * var(--ui-scale))!important}
+    #xpText{font-size:calc(12px * var(--ui-scale))!important}
+    #xpBar{width:min(54vw,calc(360px * var(--ui-scale)))!important;height:calc(14px * var(--ui-scale))!important;border-width:calc(2px * var(--ui-scale))!important}
+    #xpBar::before{inset:calc(2px * var(--ui-scale))!important;background:repeating-linear-gradient(90deg,#1d2d14 0 calc(16px * var(--ui-scale)),#15200f calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale)))!important}
+    #xpFill{left:calc(2px * var(--ui-scale))!important;top:calc(2px * var(--ui-scale))!important;bottom:calc(2px * var(--ui-scale))!important;background:repeating-linear-gradient(90deg,#6bd63f 0 calc(12px * var(--ui-scale)),#55b930 calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale)))!important}
+    .icon-btn{min-width:calc(74px * var(--ui-scale))!important}
+    .info-tip{min-width:calc(210px * var(--ui-scale))!important;max-width:min(86vw,calc(260px * var(--ui-scale)))!important;padding:calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale))!important;border-width:calc(2px * var(--ui-scale))!important;border-radius:calc(10px * var(--ui-scale))!important;font-size:calc(12px * var(--ui-scale))!important}
+    .info-tip .tip-title{margin-bottom:calc(6px * var(--ui-scale))!important}
+    .info-tip .tip-desc{margin-top:calc(4px * var(--ui-scale))!important}
+    #actorPanel{min-width:calc(188px * var(--ui-scale))!important}
+    #actorPad{grid-template-columns:repeat(3,calc(42px * var(--ui-scale)))!important;grid-template-rows:repeat(3,calc(42px * var(--ui-scale)))!important;gap:calc(4px * var(--ui-scale))!important}
+    #actorPad .btn{min-width:calc(42px * var(--ui-scale))!important;width:calc(42px * var(--ui-scale))!important;height:calc(42px * var(--ui-scale))!important}
+    #classroomBossJoinBanner{top:calc(68px * var(--ui-scale))!important;min-width:min(92vw,calc(520px * var(--ui-scale)))!important;padding:calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale))!important;border-width:calc(3px * var(--ui-scale))!important;font-size:calc(14px * var(--ui-scale))!important}
+    #cleanRebuildOverlay{font-size:calc(14px * var(--ui-scale))!important}
+    #cleanRebuildOverlay>div{width:min(92vw,calc(520px * var(--ui-scale)))!important;border-width:calc(4px * var(--ui-scale))!important;outline-width:calc(4px * var(--ui-scale))!important;padding:calc(22px * var(--ui-scale))!important}
+    #cleanGameOverTitle{font-size:calc(38px * var(--ui-scale))!important;margin-bottom:calc(10px * var(--ui-scale))!important}
+    #cleanGameOverDesc{font-size:calc(14px * var(--ui-scale))!important;margin-bottom:calc(16px * var(--ui-scale))!important}
+    [data-death-reason-v1027] div{border-width:calc(2px * var(--ui-scale))!important;padding:calc(10px * var(--ui-scale))!important;margin:calc(10px * var(--ui-scale)) 0!important}
+  `;
+  document.head.appendChild(uiScaleStyleV1030);
+
+  uiScaleRange.min = '50';
+  uiScaleRange.max = '200';
+  uiScaleRange.step = '5';
+  const _applyUiScaleV1030 = applyUiScale;
+  applyUiScale = function(){
+    state.uiScale = Math.max(0.5, Math.min(2, +(state.uiScale || 1)));
+    _applyUiScaleV1030();
+    uiScaleRange.value = Math.round((state.uiScale || 1) * 100);
+    uiScaleLabel.textContent = `UI ${Math.round((state.uiScale || 1) * 100)}%`;
+  };
+  applyUiScale();
+
+  function isHostileFactionV1030(faction){
+    return HOSTILE_FACTIONS_V1030.includes(faction);
+  }
+  function hostileCoreV1030(faction){
+    return typeof cleanCoreOf === 'function' ? cleanCoreOf(faction) : findAICore(faction);
+  }
+  function hostileCapV1030(faction){
+    const day = Math.max(1, state.day || 1);
+    const base = faction === 'zombie' ? 9 : faction === 'raider' ? 8 : 7;
+    const max = faction === 'zombie' ? 24 : faction === 'raider' ? 20 : 18;
+    return Math.min(max, base + Math.floor(day / (faction === 'zombie' ? 2 : 3)));
+  }
+  function hostileSpawnTypeV1030(faction){
+    const day = Math.max(1, state.day || 1);
+    const r = Math.random();
+    if(faction === 'raider') return r < 0.28 + Math.min(0.12, day * 0.006) ? 'ravager' : 'pillager';
+    if(faction === 'zombie'){
+      if(r < 0.18 + Math.min(0.10, day * 0.005)) return 'bigZombie';
+      if(r < 0.38) return 'skeleton';
+      if(r < 0.64) return 'smallZombie';
+      return Math.random() < 0.35 ? 'trailZombie' : 'zombie';
+    }
+    return r < 0.50 ? 'enderman' : 'creeper';
+  }
+  function buffHostileEnemyV1030(e){
+    if(!e || !isHostileFactionV1030(e.faction) || e._buffedV1030) return e;
+    const factor = e.isLeader ? 1.36 : 1.24;
+    const oldMax = Math.max(1, e.maxHp || e.hp || 1);
+    const ratio = Math.max(0.05, Math.min(1, (e.hp || oldMax) / oldMax));
+    e.maxHp = Math.ceil(oldMax * factor);
+    e.hp = Math.ceil(e.maxHp * ratio);
+    e.damage = Math.ceil((e.damage || 1) * (e.isLeader ? 1.22 : 1.16));
+    e.speed = +(e.speed || 18) * (e.isLeader ? 1.07 : 1.05);
+    e.cooldown = Math.max(0.55, (e.cooldown || 1) * 0.92);
+    if(e.type === 'pillager' || e.type === 'skeleton') e.range = Math.max(e.range || 0, 118);
+    e.aggroRadius = Math.max(e.aggroRadius || 0, e.faction === 'shadow' ? 300 : 280);
+    e.leashRadius = Math.max(e.leashRadius || 0, e.faction === 'shadow' ? 380 : 350);
+    e._buffedV1030 = true;
+    return e;
+  }
+  function buffHostileBuildingV1030(b){
+    if(!b || !isHostileFactionV1030(b.faction) || b._buffedV1030) return;
+    const oldMax = Math.max(1, b.maxHp || b.hp || buildingMaxHp(b.type));
+    const ratio = Math.max(0.05, Math.min(1, (b.hp || oldMax) / oldMax));
+    b.maxHp = Math.ceil(oldMax * 1.22);
+    b.hp = Math.ceil(b.maxHp * ratio);
+    b._buffedV1030 = true;
+  }
+  function claimHostileCircleV1030(faction, cx, cy, r){
+    if(!isHostileFactionV1030(faction) || typeof cleanClaimTile !== 'function') return;
+    for(let y = cy - r; y <= cy + r; y++){
+      for(let x = cx - r; x <= cx + r; x++){
+        if(!inMap(x,y) || terrain[y][x] === 'water') continue;
+        if(Math.hypot(x-cx,y-cy) > r + 0.25) continue;
+        const owner = typeof cleanClaimAt === 'function' ? cleanClaimAt(x,y) : null;
+        if(owner && owner !== faction) continue;
+        cleanClaimTile(faction,x,y);
+        if(faction === 'zombie' && Math.hypot(x-cx,y-cy) <= Math.max(2,r-2)) terrain[y][x] = 'blackdirt';
+      }
+    }
+  }
+  function reinforceHostileTerritoryV1030(force=false){
+    const baseRadius = 9 + Math.min(4, Math.floor((state.day || 1) / 5));
+    for(const faction of HOSTILE_FACTIONS_V1030){
+      const core = hostileCoreV1030(faction);
+      if(!core) continue;
+      const r = faction === 'zombie' ? baseRadius + 1 : baseRadius;
+      claimHostileCircleV1030(faction, core.x, core.y, r);
+      if(force){
+        for(const e of enemies) if(e.faction === faction) buffHostileEnemyV1030(e);
+        for(const b of buildings) if(b.faction === faction) buffHostileBuildingV1030(b);
+      }
+    }
+  }
+
+  const _buildingMaxHpV1030 = buildingMaxHp;
+  buildingMaxHp = function(type){
+    return _buildingMaxHpV1030(type);
+  };
+
+  const _spawnFactionEnemyV1030 = spawnFactionEnemy;
+  spawnFactionEnemy = function(type, wx, wy, faction, cfg={}){
+    const out = _spawnFactionEnemyV1030(type, wx, wy, faction, cfg);
+    const e = enemies.length ? enemies[enemies.length - 1] : null;
+    if(e && e.faction === faction) buffHostileEnemyV1030(e);
+    return out;
+  };
+
+  const _cleanMakeEnemyV1030 = cleanMakeEnemy;
+  cleanMakeEnemy = function(type, faction, wx, wy, opts={}){
+    const e = _cleanMakeEnemyV1030(type, faction, wx, wy, opts);
+    return buffHostileEnemyV1030(e);
+  };
+
+  const _cleanExpansionPhaseOfV1030 = cleanExpansionPhaseOf;
+  cleanExpansionPhaseOf = function(faction){
+    if(!isHostileFactionV1030(faction)) return _cleanExpansionPhaseOfV1030(faction);
+    const day = Math.max(1, state.day || 1);
+    const seed = cleanFactionSeed(faction);
+    const activeDays = 4;
+    const restDays = 1;
+    const cycle = activeDays + restDays;
+    const p = (day + seed) % cycle;
+    return {active:p < activeDays, activeDays, restDays, cycle, phaseIndex:p};
+  };
+
+  const _cleanLeaderOccupyMoveV1030 = cleanLeaderOccupyMove;
+  cleanLeaderOccupyMove = function(e, dt){
+    const out = _cleanLeaderOccupyMoveV1030(e, dt);
+    if(e && e.isLeader && isHostileFactionV1030(e.faction)){
+      const c = tileCoordsAtWorld(e.x,e.y);
+      if(inMap(c.tx,c.ty)){
+        const active = cleanExpansionPhaseOf(e.faction).active;
+        claimHostileCircleV1030(e.faction, c.tx, c.ty, active ? 2 : 1);
+      }
+    }
+    return out;
+  };
+
+  const _updateAIKingdomsV1030 = updateAIKingdoms;
+  updateAIKingdoms = function(dt){
+    _updateAIKingdomsV1030(dt);
+    reinforceHostileTerritoryV1030(false);
+    for(const e of enemies) buffHostileEnemyV1030(e);
+    for(const b of buildings) buffHostileBuildingV1030(b);
+    state.hostileGrowthTimerV1030 = (state.hostileGrowthTimerV1030 || 0) + dt;
+    const interval = Math.max(2.8, 4.8 - Math.min(1.5, (state.day || 1) * 0.08));
+    if(state.hostileGrowthTimerV1030 < interval) return;
+    state.hostileGrowthTimerV1030 = 0;
+    for(const faction of HOSTILE_FACTIONS_V1030){
+      const core = hostileCoreV1030(faction), leader = cleanLeaderOf(faction);
+      if(!core || !leader) continue;
+      const count = countFactionEnemies(faction);
+      const cap = hostileCapV1030(faction);
+      if(count >= cap) continue;
+      const spawnCount = (state.day || 1) >= 8 && count < cap - 2 && Math.random() < 0.34 ? 2 : 1;
+      for(let i=0;i<spawnCount;i++){
+        const a = Math.random() * Math.PI * 2;
+        const rr = (2.5 + Math.random() * 5.2) * TILE;
+        const wx = (core.x+0.5)*TILE + Math.cos(a) * rr;
+        const wy = (core.y+0.5)*TILE + Math.sin(a) * rr;
+        spawnFactionEnemy(hostileSpawnTypeV1030(faction), wx, wy, faction, {homeX:leader.x, homeY:leader.y});
+      }
+    }
+  };
+
+  const _loadGameV1030 = loadGame;
+  loadGame = function(saveKey=AUTOSAVE_KEY){
+    const out = _loadGameV1030(saveKey);
+    reinforceHostileTerritoryV1030(true);
+    applyUiScale();
+    return out;
+  };
+
+  reinforceHostileTerritoryV1030(true);
+  addLog('v0.10.30：所有 UI 支持更大范围缩放和面板自定义尺寸；敌对阵营地盘扩大、发展更快、单位和建筑更强。','good');
+
 })();
 </script>
 </body>
