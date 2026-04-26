@@ -1322,9 +1322,9 @@
   function setUiMinimized(minimized){ state.uiMinimized=!!minimized; applyUiVisibility(); }
   toggleUiBtn.onclick=()=>setUiVisible(state.uiHidden); uiDockBtn.onclick=()=>setUiMinimized(!state.uiMinimized); uiScaleRange.oninput=()=>{ state.uiScale=+uiScaleRange.value/100; applyUiScale(); }; zoomInBtn.onclick=()=>setZoomAt(state.zoom+0.15, canvas.width/2, canvas.height/2); zoomOutBtn.onclick=()=>setZoomAt(state.zoom-0.15, canvas.width/2, canvas.height/2); centerBtn.onclick=centerCamera; exitGameBtn.onclick=exitToMainMenu;
 
-  let draggingMap=false,movedMap=false,lastX=0,lastY=0;
-  canvas.addEventListener('pointerdown',(e)=>{ ensureAudio(); draggingMap=true; movedMap=false; lastX=e.clientX; lastY=e.clientY; canvas.setPointerCapture(e.pointerId); canvas.classList.add('dragging'); });
-  canvas.addEventListener('pointermove',(e)=>{ const rect=canvas.getBoundingClientRect(); const sx=(e.clientX-rect.left)*(canvas.width/rect.width), sy=(e.clientY-rect.top)*(canvas.height/rect.height); hoverTile=tileFromScreen(sx,sy); if(!draggingMap) return; const dx=e.clientX-lastX, dy=e.clientY-lastY; if(Math.abs(dx)+Math.abs(dy)>2) movedMap=true; state.cameraX -= dx*(canvas.width/rect.width)/state.zoom; state.cameraY -= dy*(canvas.height/rect.height)/state.zoom; clampCamera(); lastX=e.clientX; lastY=e.clientY; });
+  let draggingMap=false,movedMap=false,lastX=0,lastY=0,mapDragPointerId=null;
+  canvas.addEventListener('pointerdown',(e)=>{ ensureAudio(); draggingMap=true; movedMap=false; mapDragPointerId=e.pointerId; lastX=e.clientX; lastY=e.clientY; canvas.setPointerCapture(e.pointerId); canvas.classList.add('dragging'); });
+  canvas.addEventListener('pointermove',(e)=>{ const rect=canvas.getBoundingClientRect(); const sx=(e.clientX-rect.left)*(canvas.width/rect.width), sy=(e.clientY-rect.top)*(canvas.height/rect.height); hoverTile=tileFromScreen(sx,sy); if(!draggingMap) return; if(e.pointerType!=='touch'&&e.buttons===0){ stopMapDragV1028(false,e.pointerId); return; } const dx=e.clientX-lastX, dy=e.clientY-lastY; if(Math.abs(dx)+Math.abs(dy)>2) movedMap=true; state.cameraX -= dx*(canvas.width/rect.width)/state.zoom; state.cameraY -= dy*(canvas.height/rect.height)/state.zoom; clampCamera(); lastX=e.clientX; lastY=e.clientY; });
   canvas.addEventListener('wheel',(e)=>{
     e.preventDefault();
     const rect=canvas.getBoundingClientRect();
@@ -1333,7 +1333,7 @@
     const factor = e.deltaY < 0 ? 1.12 : (1/1.12);
     setZoomAt(state.zoom * factor, sx, sy);
   }, { passive:false });
-  canvas.addEventListener('pointerup',(e)=>{ draggingMap=false; canvas.classList.remove('dragging'); const rect=canvas.getBoundingClientRect(); const sx=(e.clientX-rect.left)*(canvas.width/rect.width), sy=(e.clientY-rect.top)*(canvas.height/rect.height); const info=tileFromScreen(sx,sy); if(movedMap) return;
+  canvas.addEventListener('pointerup',(e)=>{ stopMapDragV1028(false,e.pointerId); const rect=canvas.getBoundingClientRect(); const sx=(e.clientX-rect.left)*(canvas.width/rect.width), sy=(e.clientY-rect.top)*(canvas.height/rect.height); const info=tileFromScreen(sx,sy); if(movedMap) return;
     if(state.mode){ let ok=false; if(state.mode==='wall'){ if(buildLocked('wall')){ addLog('等级不够，暂时不能建这个。','bad'); return; } if(!canAfford(BUILD_INFO.wall.cost)){ addLog('材料不足，不能放置。','bad'); state.mode=null; refreshButtons(); return; } const pos=findNearestBuildableTile(info.tx,info.ty,2); ok=pos?addWall(pos.x,pos.y):false; } else if(state.mode==='demolish') ok=demolishAt(info.tx,info.ty); else if(state.mode==='repair') ok=repairAt(info.tx,info.ty); else { const cfg=BUILD_INFO[state.mode]; if(cfg){ if(buildLocked(state.mode)){ addLog('等级不够，暂时不能建这个。','bad'); return; } if(!canAfford(cfg.cost)){ addLog('材料不足，不能放置。','bad'); state.mode=null; refreshButtons(); return; } } const pos=findNearestBuildableTile(info.tx,info.ty,2); ok=pos?placeBuilding(state.mode,pos.x,pos.y):false; } if(!ok) addLog(state.mode==='demolish'?'这里没有可拆除的目标。':state.mode==='repair'?'这里没有可修复的目标，或材料不够。':'这里不能放置。','bad'); return; }
     const clicked=findFriendlyAt(info.wx,info.wy);
     if(clicked){ selectedActor=clicked; return; }
@@ -5526,7 +5526,7 @@
     for(const u of units){ if(isEnemyTargetForFaction(faction,u)) arr.push({kind:'unit',obj:u,x:u.x,y:u.y}); }
     for(const v of villagers){ if(isEnemyTargetForFaction(faction,v)) arr.push({kind:'villager',obj:v,x:v.x,y:v.y}); }
     for(const en of enemies){ if(en.faction!==faction && en.hp>0) arr.push({kind:en.isLeader?'leader':'enemy',obj:en,x:en.x,y:en.y}); }
-    if(faction!=='player' && state.castleHp>0) arr.push({kind:'castle',obj:state,x:castle.x+TILE*2,y:castle.y+TILE*2});
+    if(faction!=='player' && state.castleHp>0) arr.push({kind:'castle',obj:state,x:(castle.x+0.5)*TILE,y:(castle.y+0.5)*TILE});
     return arr;
   }
   function nearestFactionTarget(e, maxDist){
@@ -5557,7 +5557,7 @@
     for(const en of enemies){
       if(en!==creeper && en.hp>0 && Math.hypot(en.x-creeper.x,en.y-creeper.y)<=r){ damageCreatureObj(en, sameCamp(en,creeper)?35:90); }
     }
-    if(state.castleHp>0 && Math.hypot((castle.x+TILE*2)-creeper.x,(castle.y+TILE*2)-creeper.y)<=r){ state.castleHp = Math.max(0, state.castleHp - 80); }
+    if(state.castleHp>0 && Math.hypot((castle.x+0.5)*TILE-creeper.x,(castle.y+0.5)*TILE-creeper.y)<=r){ state.castleHp = Math.max(0, state.castleHp - 80); }
     creeper.hp=0;
     if(typeof addLog==='function') addLog('苦力怕爆炸：5格范围内建筑被摧毁，首领不会被直接秒杀。','bad');
   }
@@ -5616,7 +5616,7 @@
 
   canvas.addEventListener('pointerup', (ev)=>{
     if(!selectedActor || ev.button!==0) return;
-    if(buildMode || patchPlaceMode) return;
+    if(movedMap || state.mode || buildMode || patchPlaceMode) return;
     const m=worldMouse(ev);
     const gx=Math.floor(m.x/TILE), gy=Math.floor(m.y/TILE);
     if(!inBounds(gx,gy)) return;
@@ -5625,6 +5625,8 @@
     if(clickedFriendly || clickedEnemy) return;
     selectedActor.manualTarget={x:gx*TILE+TILE/2,y:gy*TILE+TILE/2};
     selectedActor.manualTargetTime=8;
+    selectedActor.manualTargetFromMapV1026=true;
+    clearActorPath(selectedActor);
     selectedActor.target=null;
     ev.preventDefault();
     ev.stopImmediatePropagation();
@@ -6514,6 +6516,190 @@
   ensureBossJoinBanner();
   updateBossJoinBanner();
   addLog('v0.10.25：第15天新增独立 Boss“校服霸主”，带顶部血条、远程箭、近战重击、随从军团、成就和丰厚奖励。','good');
+
+  // ===== v0.10.26：领主占领建造 + 地图操作修复 =====
+  const LEADER_BUILD_FIX_VERSION = 'v0.10.26-leader-build-map-fix';
+
+  function playerClaimedTileV1026(tx, ty){
+    if(!inMap(tx,ty) || typeof cleanEnsureClaims !== 'function' || typeof cleanTileKey !== 'function') return false;
+    const claims = cleanEnsureClaims();
+    return claims[cleanTileKey(tx,ty)] === 'player';
+  }
+
+  const _isPlayerTerritoryTileV1026 = isPlayerTerritoryTileV012;
+  isPlayerTerritoryTileV012 = function(tx, ty){
+    return _isPlayerTerritoryTileV1026(tx,ty) || playerClaimedTileV1026(tx,ty);
+  };
+
+  const _actorUnderControlV1026 = actorUnderControl;
+  actorUnderControl = function(actor){
+    const under = _actorUnderControlV1026(actor);
+    if(!under) return false;
+    if(actor && actor.manualTarget){
+      const dir = getControlDir();
+      if(!dir.x && !dir.y) return false;
+    }
+    return true;
+  };
+
+  const _updateUnitsV1026 = updateUnits;
+  updateUnits = function(dt){
+    _updateUnitsV1026(dt);
+    for(const u of units){
+      if(!u.manualTargetFromMapV1026 || !u.manualTarget) continue;
+      if(dist(u.x,u.y,u.manualTarget.x,u.manualTarget.y)<8 || (u.manualTargetTime||0)<=0){
+        u.manualTarget=null;
+        u.manualTargetFromMapV1026=false;
+        clearActorPath(u);
+      }
+    }
+  };
+
+  addLog('v0.10.26：修复领主占领后的建造权限；修复选中人物时点地移动、建造模式和拖地图互相抢操作。','good');
+
+  // ===== v0.10.27：失败原因诊断面板 =====
+  const DEATH_REASON_VERSION = 'v0.10.27-death-reason-diagnostics';
+
+  function ensureDeathDiagnosticsV1027(){
+    if(!state.deathDiagnosticsV1027){
+      state.deathDiagnosticsV1027 = {version:DEATH_REASON_VERSION, events:[], lastCastleHp:state.castleHp||0, lastLeaderHp:null, lastWallHp:state.wallHp||0};
+    }
+    state.deathDiagnosticsV1027.version = DEATH_REASON_VERSION;
+    return state.deathDiagnosticsV1027;
+  }
+  function describeNearestThreatV1027(x, y){
+    let best=null, bestD=Infinity;
+    for(const e of enemies){
+      if((e.hp||0)<=0) continue;
+      const d=Math.hypot((e.x||0)-x,(e.y||0)-y);
+      if(d<bestD){ best=e; bestD=d; }
+    }
+    if(!best) return '附近没有存活敌人';
+    return `${getActorName(best)}(${factionLabelOf(best.faction||'monster')}) 距离 ${Math.round(bestD/TILE)} 格，血量 ${Math.ceil(best.hp||0)}`;
+  }
+  function pushDeathEventV1027(text, cls='bad'){
+    const d=ensureDeathDiagnosticsV1027();
+    const line=`第${state.day||1}天${state.phase==='night'?'夜晚':'白天'}：${text}`;
+    d.events.push(line);
+    if(d.events.length>8) d.events.shift();
+    d.lastEvent=line;
+    if(cls && typeof addLog==='function') addLog(line, cls);
+  }
+  function currentDeathSummaryV1027(){
+    const d=ensureDeathDiagnosticsV1027();
+    const lines=(d.events||[]).slice(-5);
+    const leader=cleanLeaderOf ? cleanLeaderOf('player') : null;
+    const status=`基地 ${Math.floor(state.castleHp||0)}/${Math.floor(state.castleHpMax||0)}，城墙 ${Math.floor(state.wallHp||0)}/${Math.floor(state.wallHpMax||0)}，我方首领 ${leader?Math.ceil(leader.hp||0):0}/${leader?Math.ceil(leader.maxHp||0):0}`;
+    return `<div style="text-align:left;background:rgba(255,255,255,.06);border:2px solid #333;padding:10px;margin:10px 0;line-height:1.55"><b>失败原因</b><br>${state.gameOverReason||d.lastEvent||'暂未记录到明确原因。'}<br><b>最后状态</b><br>${status}<br><b>最近损失记录</b><br>${lines.length?lines.map(x=>`· ${x}`).join('<br>'):'· 暂无'}</div>`;
+  }
+
+  const _cleanShowGameOverV1027 = cleanShowGameOver;
+  cleanShowGameOver = function(forceGameOver=false){
+    _cleanShowGameOverV1027(forceGameOver);
+    const el=document.getElementById('cleanRebuildOverlay');
+    const desc=el && el.querySelector('#cleanGameOverDesc');
+    if(desc && !desc.querySelector('[data-death-reason-v1027]')){
+      desc.innerHTML += `<div data-death-reason-v1027="1">${currentDeathSummaryV1027()}</div>`;
+    }
+  };
+
+  const _dealDamageV1027 = dealDamage;
+  dealDamage = function(target, amount){
+    const before=target && target.hp;
+    _dealDamageV1027(target, amount);
+    if(target && target.faction==='player' && target.isLeader && before>0 && target.hp<before){
+      pushDeathEventV1027(`我方首领受到 ${Math.ceil(before-target.hp)} 点伤害；${describeNearestThreatV1027(target.x,target.y)}`,'warn');
+      if(target.hp<=0) state.gameOverReason=`我方首领被击倒。最后威胁：${describeNearestThreatV1027(target.x,target.y)}`;
+    }
+  };
+
+  const _updateV1027 = update;
+  update = function(dt){
+    const d=ensureDeathDiagnosticsV1027();
+    const leaderBefore=cleanLeaderOf ? cleanLeaderOf('player') : null;
+    const leaderHpBefore=leaderBefore ? leaderBefore.hp||0 : null;
+    const castleBefore=state.castleHp||0;
+    const wallBefore=state.wallHp||0;
+    _updateV1027(dt);
+    const leaderAfter=cleanLeaderOf ? cleanLeaderOf('player') : null;
+    const leaderHpAfter=leaderAfter ? leaderAfter.hp||0 : 0;
+    if(castleBefore > (state.castleHp||0)){
+      const loss=Math.ceil(castleBefore-(state.castleHp||0));
+      const cx=(castle.x+0.5)*TILE, cy=(castle.y+0.5)*TILE;
+      pushDeathEventV1027(`基地损失 ${loss} 点耐久；${describeNearestThreatV1027(cx,cy)}`,'warn');
+      if((state.castleHp||0)<=0 && !state.gameOverReason) state.gameOverReason=`基地耐久归零。最后威胁：${describeNearestThreatV1027(cx,cy)}`;
+    }
+    if(wallBefore > (state.wallHp||0)){
+      d.lastWallDamage=`城墙损失 ${Math.ceil(wallBefore-(state.wallHp||0))} 点`;
+    }
+    if(leaderHpBefore!=null && leaderHpBefore > leaderHpAfter){
+      pushDeathEventV1027(`我方首领损失 ${Math.ceil(leaderHpBefore-leaderHpAfter)} 点生命；${leaderAfter?describeNearestThreatV1027(leaderAfter.x,leaderAfter.y):'首领已倒下'}`,'warn');
+      if(leaderHpAfter<=0 && !state.gameOverReason) state.gameOverReason='我方首领阵亡，国度瓦解。';
+    }
+    d.lastCastleHp=state.castleHp||0;
+    d.lastLeaderHp=leaderAfter?leaderAfter.hp||0:null;
+    d.lastWallHp=state.wallHp||0;
+    window.__mkDebugSnapshot = function(){
+      const leader=cleanLeaderOf ? cleanLeaderOf('player') : null;
+      return {day:state.day, phase:state.phase, lost:state.lost, rebuildPending:state.rebuildPending, reason:state.gameOverReason||'', castleHp:state.castleHp, wallHp:state.wallHp, leader:leader?{hp:leader.hp,maxHp:leader.maxHp,x:leader.x,y:leader.y}:null, enemies:enemies.filter(e=>e.hp>0).map(e=>({type:e.type,faction:e.faction,hp:e.hp,x:e.x,y:e.y})).slice(0,40), events:d.events||[]};
+    };
+  };
+
+  addLog('v0.10.27：结束面板会显示明确失败原因，并记录基地/首领最近损失来源。','good');
+
+  // ===== v0.10.28：人物面板攻击不再带动地图 =====
+  function stopMapDragV1028(resetMoved=true,pointerId=null){
+    try{
+      draggingMap=false;
+      if(resetMoved) movedMap=false;
+      canvas.classList.remove('dragging');
+      const ids=[pointerId,mapDragPointerId].filter(id=>id!==null&&id!==undefined);
+      for(const id of ids){
+        if(canvas.hasPointerCapture && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+      }
+      mapDragPointerId=null;
+      for(let id=1; id<64; id++){
+        if(canvas.hasPointerCapture && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+      }
+    }catch(_e){}
+  }
+
+  const _manualUnitAttackV1028 = manualUnitAttack;
+  manualUnitAttack = function(){
+    stopMapDragV1028();
+    Object.keys(controlInput).forEach(k=>controlInput[k]=false);
+    const out = _manualUnitAttackV1028.apply(this, arguments);
+    stopMapDragV1028();
+    if(selectedActor && selectedActor.manualTarget){
+      selectedActor.manualTargetFromMapV1026=false;
+      clearActorPath(selectedActor);
+    }
+    return out;
+  };
+
+  ['pointerdown','pointermove','pointerup','mousedown','mousemove','mouseup','touchstart','touchmove','touchend'].forEach(type=>{
+    actorPanel.addEventListener(type, (ev)=>{
+      if(type==='pointerdown' || type==='mousedown' || type==='touchstart') stopMapDragV1028();
+      ev.stopPropagation();
+    }, true);
+  });
+
+  ['pointerup','pointercancel','mouseup','touchend','touchcancel'].forEach(type=>{
+    window.addEventListener(type, (ev)=>stopMapDragV1028(false,ev.pointerId), true);
+    document.addEventListener(type, (ev)=>stopMapDragV1028(false,ev.pointerId), true);
+  });
+  window.addEventListener('click', ()=>stopMapDragV1028(), true);
+  window.addEventListener('blur', ()=>stopMapDragV1028(), true);
+
+  const apV1028 = window.__actorPanelBtns || {};
+  if(apV1028.actorAttackBtn){
+    apV1028.actorAttackBtn.onclick = (ev)=>{
+      if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+      manualUnitAttack();
+    };
+  }
+
+  addLog('v0.10.29：鼠标点击/抬起会强制取消地图拖动，人物攻击后不再拖着地图走。','good');
 
 })();
 </script>
